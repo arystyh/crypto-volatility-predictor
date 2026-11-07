@@ -1,0 +1,51 @@
+# Render Blueprint. Dua opsi — pilih SATU (hapus yang lain sebelum deploy):
+#
+# A) ALWAYS-ON (berbayar, disarankan untuk produksi): ingestion sebagai Background Worker
+#    + API sebagai Web Service. Background Worker di Render TIDAK ada di paket gratis.
+# B) $0: satu Web Service gratis yang menjalankan API + ingestion + engine + monitor dalam satu proses
+#    (RUN_INGESTION=true), dijaga tetap bangun oleh cron keep-alive
+#    (.github/workflows/keepalive.yml atau cron-job.org tiap 10 menit).
+services:
+  # ---------------- Opsi B: $0 ----------------
+  - type: web
+    name: crypto-vol-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: REDIS_URL          # Upstash: rediss://default:<password>@<host>.upstash.io:6379
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: TELEGRAM_MODE
+        value: webhook
+      - key: TELEGRAM_WEBHOOK_URL   # https://<nama-service>.onrender.com/telegram/webhook
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true
+      - key: RUN_INGESTION
+        value: "true"
+      - key: ADMIN_API_TOKEN
+        generateValue: true
+      - key: PUBLIC_BASE_URL       # https://<nama-service>.onrender.com
+        sync: false
+      - key: SYMBOLS
+        value: BTCUSDT
+      - key: ENABLE_CHALLENGER      # hemat RAM di instance 512MB
+        value: "false"
+      - key: HEARTBEAT_INTERVAL_SEC # hemat kuota Upstash (breaker membaca state lokal, bukan Redis)
+        value: "30"
+
+  # ---------------- Opsi A: always-on (berbayar) ----------------
+  # - type: worker
+  #   name: crypto-vol-ingestion
+  #   runtime: docker
+  #   plan: starter
+  #   dockerCommand: python -m ingestion.worker
+  #   envVars:
+  #     - key: REDIS_URL
+  #       sync: false
+  #     - key: SYMBOLS
+  #       value: BTCUSDT

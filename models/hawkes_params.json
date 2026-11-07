@@ -1,0 +1,21 @@
+{
+  "mu": [
+    0.05,
+    0.01
+  ],
+  "alpha": [
+    [
+      0.3,
+      0.4
+    ],
+    [
+      0.05,
+      0.3
+    ]
+  ],
+  "beta": 1.0,
+  "branching": 0.4414213562373095,
+  "model_version": "default (belum di-fit; jalankan scripts/fit_hawkes.py)",
+  "fitted_at": null,
+  "n_events": null
+}

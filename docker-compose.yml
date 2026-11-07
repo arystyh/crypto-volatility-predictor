@@ -1,0 +1,55 @@
+# One-command setup:  docker compose up --build   ->  http://localhost:8000 (ledger explorer)
+x-app: &app
+  build: .
+  image: crypto-volatility-predictor:latest
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    REDIS_URL: redis://service-redis:6379/0
+    DATABASE_URL: sqlite:////app/data/volatility.db
+    LEDGER_PATH: /app/data/ledger.db
+    DATA_DIR: /app/data
+  restart: unless-stopped
+
+services:
+  service-redis:
+    image: redis:7-alpine
+    # AOF: state baseline/EWM/conformal/cooldown & Redis Stream bertahan saat Redis restart
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "128mb",
+              "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  service-ingestion:
+    <<: *app
+    command: ["python", "-m", "ingestion.worker"]
+    environment:
+      REDIS_URL: redis://service-redis:6379/0
+      RECORD_TICKS: ${RECORD_TICKS:-false}
+      RECORD_DIR: /app/data/ticks
+    volumes:
+      - app-data:/app/data
+    depends_on:
+      service-redis:
+        condition: service_healthy
+
+  service-api:
+    <<: *app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["8000:8000"]
+    volumes:
+      - app-data:/app/data
+    depends_on:
+      service-redis:
+        condition: service_healthy
+
+volumes:
+  app-data:
+  redis-data:

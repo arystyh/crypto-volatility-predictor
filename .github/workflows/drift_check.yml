@@ -1,0 +1,68 @@
+name: Weekly ledger check
+
+# Mingguan: verifikasi hash chain ledger live secara INDEPENDEN (bukan percaya /ledger/verify),
+# pastikan head yang di-commit minggu lalu masih ada di rantai, lalu commit badge + ledger_head.txt.
+# Job MERAH bila hash chain putus atau riwayat ditulis ulang. PSI drift opsional (vars.PSI_CHECK).
+#
+# Set di Settings -> Secrets and variables -> Actions:
+#   variable/secret API_URL   contoh https://crypto-vol-api.onrender.com
+#   variable PSI_CHECK=true   (opsional) hitung PSI fitur live vs data train, ambang 0.2
+on:
+  schedule:
+    - cron: "17 2 * * 1"   # Senin 02:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency: ledger-check
+
+jobs:
+  ledger:
+    runs-on: ubuntu-latest
+    env:
+      API_URL: ${{ vars.API_URL || secrets.API_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Cek konfigurasi
+        id: cfg
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "::notice::API_URL belum diset, job dilewati."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verifikasi hash chain + anchor git
+        if: steps.cfg.outputs.skip != 'true'
+        run: |
+          python -m scripts.verify_ledger --url "$API_URL" --anchor badges/ledger_head.txt --out badges
+
+      - name: PSI drift fitur (opsional, ambang 0.2)
+        if: steps.cfg.outputs.skip != 'true' && vars.PSI_CHECK == 'true'
+        run: |
+          python -m scripts.psi_drift --url "$API_URL" --threshold 0.2 --out badges/psi.json \
+            || echo "::warning::PSI > 0.2 pada sebagian fitur (lihat badges/psi_report.json). Pertimbangkan retrain."
+
+      - name: Commit badge + ledger_head.txt
+        if: steps.cfg.outputs.skip != 'true'
+        run: |
+          git config user.name "ledger-bot"
+          git config user.email "ledger-bot@users.noreply.github.com"
+          git add badges/
+          git diff --cached --quiet || git commit -m "chore(ledger): head mingguan + badge live"
+          git push
+
+      - name: Buka issue bila ledger rusak
+        if: failure() && steps.cfg.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --title "Ledger gagal verifikasi $(date -u +%F)" \
+            --body "Workflow ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} menemukan hash chain putus atau head lama hilang. Jangan publikasikan metrik sampai diselidiki."

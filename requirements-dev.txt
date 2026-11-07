@@ -1,0 +1,3 @@
+-r requirements.txt
+pytest>=8
+hftbacktest>=2.4,<3        # tests/test_orderbook_parity.py (order book lokal vs hftbacktest)

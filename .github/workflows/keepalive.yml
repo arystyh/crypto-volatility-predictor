@@ -1,0 +1,19 @@
+name: Keep-Alive Ping
+
+# Mencegah web service gratis (Render/Railway) masuk sleep mode.
+# Set repository secret API_URL, contoh: https://crypto-vol-api.onrender.com
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # tiap 10 menit (GitHub bisa menunda beberapa menit saat sibuk)
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        env:
+          API_URL: ${{ secrets.API_URL }}
+        run: |
+          if [ -z "$API_URL" ]; then echo "Secret API_URL belum diset, lewati."; exit 0; fi
+          curl -fsS --max-time 60 "$API_URL/health" | head -c 300 || echo "ping gagal (service mungkin sedang bangun)"

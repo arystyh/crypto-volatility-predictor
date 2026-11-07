@@ -1,0 +1,25 @@
+# Service (API + engine + ingestion)
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.7,<3
+pydantic-settings>=2.3,<3
+redis>=5.0,<9
+websockets>=13,<18
+httpx>=0.27,<1
+SQLAlchemy>=2.0,<3
+numpy>=1.26,<3
+pandas>=2.2,<4
+scipy>=1.13,<2
+pyarrow>=15,<30            # rekaman tick Parquet (TickRecorder)
+fakeredis>=2.26,<3         # replay deterministik (python -m app.services.replay)
+# Inference: ONNX Runtime = champion + hazard, LightGBM = challenger shadow, XGBoost = kontribusi fitur
+onnxruntime>=1.18,<2
+lightgbm>=4.3,<5
+xgboost>=2.1,<4
+# Training, baseline, laporan
+scikit-learn>=1.5,<2
+onnx>=1.16,<2
+onnxmltools>=1.12,<2
+arch>=7,<9                 # baseline GARCH(1,1)
+matplotlib>=3.8,<4         # reliability diagram, halaman insiden
+# Supabase Postgres (opsional): psycopg[binary]>=3.2

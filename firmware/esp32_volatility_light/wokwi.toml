@@ -1,0 +1,4 @@
+[wokwi]
+version = 1
+firmware = "build/esp32_volatility_light.ino.bin"
+elf = "build/esp32_volatility_light.ino.elf"

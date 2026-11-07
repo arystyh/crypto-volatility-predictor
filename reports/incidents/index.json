@@ -1,0 +1,40 @@
+{
+  "incidents": [
+    {
+      "name": "demo-sintetis-1",
+      "title": "Demo sintetis #1: lonjakan volatilitas 2026-02-04 12:42",
+      "date": "2026-02-04",
+      "page": "demo-sintetis-1.html",
+      "synthetic": true,
+      "alerts": 18,
+      "episodes": 1,
+      "caught": 1,
+      "lead_min": 1.0,
+      "model_version": "20261107-0744-synthetic"
+    },
+    {
+      "name": "demo-sintetis-2",
+      "title": "Demo sintetis #2: lonjakan volatilitas 2026-02-06 15:03",
+      "date": "2026-02-06",
+      "page": "demo-sintetis-2.html",
+      "synthetic": true,
+      "alerts": 10,
+      "episodes": 2,
+      "caught": 2,
+      "lead_min": 29.5,
+      "model_version": "20261107-0744-synthetic"
+    },
+    {
+      "name": "demo-sintetis-3",
+      "title": "Demo sintetis #3: lonjakan volatilitas 2026-02-13 14:56",
+      "date": "2026-02-13",
+      "page": "demo-sintetis-3.html",
+      "synthetic": true,
+      "alerts": 8,
+      "episodes": 2,
+      "caught": 2,
+      "lead_min": 25.5,
+      "model_version": "20261107-0744-synthetic"
+    }
+  ]
+}

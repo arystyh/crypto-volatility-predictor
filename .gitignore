@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+data/*.db
+data/*.csv
+.pytest_cache/
+.streamlit/secrets.toml
+data/ticks/
+*.crt

@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forecast Ledger BTCUSDT</title>
+<meta name="description" content="Ledger prediksi lonjakan volatilitas BTCUSDT yang append-only dan bisa diverifikasi di browser.">
+<style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#1d1d1b;--muted:#6b6b66;--line:#e3e2dd;--ok:#1a7f4b;--bad:#b42318;--warn:#a15c00;--accent:#2f5bd3;--chip:#efeee9;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#141413;--panel:#1d1d1b;--ink:#ecebe6;--muted:#a3a29b;--line:#33322e;--ok:#4cc38a;--bad:#f97066;--warn:#f5b041;--accent:#7a9cff;--chip:#2a2926}}
+:root[data-theme=dark]{--bg:#141413;--panel:#1d1d1b;--ink:#ecebe6;--muted:#a3a29b;--line:#33322e;--ok:#4cc38a;--bad:#f97066;--warn:#f5b041;--accent:#7a9cff;--chip:#2a2926}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:1.5rem;margin:0 0 4px}h2{font-size:1.1rem;margin:0 0 12px}
+p.lead{color:var(--muted);margin:0 0 20px;max-width:70ch}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:12px}
+.kpi b{display:block;font-size:1.35rem;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--muted);font-size:.85rem}
+.mono{font-family:var(--mono);font-size:.85rem;word-break:break-all}
+button,select,input{font:inherit;color:inherit;background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:6px 12px}
+button{cursor:pointer}button:disabled{opacity:.5;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.muted{color:var(--muted)}
+.chip{display:inline-block;background:var(--chip);border-radius:999px;padding:0 8px;font-size:.8rem}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:.88rem}
+th{color:var(--muted);font-weight:600}
+a{color:var(--accent)}
+progress{width:220px}
+pre{background:var(--chip);padding:12px;border-radius:8px;overflow-x:auto;font-size:.8rem}
+footer{color:var(--muted);font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+<h1>Forecast ledger BTCUSDT</h1>
+<p class="lead">Setiap prediksi lonjakan volatilitas 15 menit dicatat di sini <em>sebelum</em> hasilnya diketahui, lalu diskor otomatis.
+Tiap baris memuat hash SHA-256 dari baris sebelumnya, jadi mengubah satu baris lama memutus semua hash sesudahnya.
+Tombol verifikasi di bawah menghitung ulang seluruh rantai di browser Anda, tanpa mempercayai server.</p>
+
+<div id="detail"></div>
+
+<section>
+<h2>Integritas hash chain</h2>
+<div class="row" style="margin-bottom:8px"><span class="muted">Head saat ini</span> <span id="head" class="mono">…</span></div>
+<div class="row" style="margin-bottom:8px"><span class="muted">Jumlah baris</span> <b id="rows">…</b></div>
+<div class="row">
+<button id="verify">Verifikasi di browser</button>
+<progress id="prog" value="0" max="1" hidden></progress>
+<span id="vres"></span>
+</div>
+<div class="row" style="margin-top:12px">
+<input id="anchor" class="mono" placeholder="Tempel head lama dari git (badges/ledger_head.txt)" style="flex:1;min-width:240px">
+<button id="checkAnchor">Cek ada di rantai</button>
+<span id="ares"></span>
+</div>
+</section>
+
+<section>
+<h2>Performa live per model <select id="days"><option value="7">7 hari</option><option value="30">30 hari</option><option value="90">90 hari</option></select></h2>
+<div id="perf" class="grid"><span class="muted">Memuat…</span></div>
+<p id="thr" class="muted" style="margin:12px 0 0"></p>
+</section>
+
+<section>
+<div class="row" style="justify-content:space-between;margin-bottom:8px">
+<h2 style="margin:0">Prediksi terbaru</h2>
+<select id="model"><option value="">Semua model</option><option>champion_xgboost</option><option>challenger_lgbm</option><option>hazard_xgb</option><option>fallback_parkinson</option></select>
+</div>
+<div class="tbl"><table><thead><tr><th>seq</th><th>Waktu keputusan (UTC)</th><th>Model</th><th>P(spike)</th><th>Threshold</th><th>Sinyal</th><th>Status</th><th>Hasil (Z)</th><th>Label</th></tr></thead>
+<tbody id="recent"><tr><td colspan="9" class="muted">Memuat…</td></tr></tbody></table></div>
+</section>
+
+<section>
+<h2>Insiden</h2>
+<div id="incidents" class="muted">Memuat…</div>
+</section>
+
+<footer>API mentah: <a href="/ledger/rows">/ledger/rows</a> · <a href="/ledger/head">/ledger/head</a> · <a href="/performance">/performance</a> · <a href="/docs">/docs</a>.
+Verifikasi independen dari terminal: <span class="mono">python scripts/verify_ledger.py --url &lt;host&gt;</span></footer>
+</main>
+<script src="/static/ledger-verify.js"></script>
+<script>
+"use strict";
+const {GENESIS, canonical, rowHash} = window.LedgerVerify;
+
+const $ = id => document.getElementById(id);
+const fmtT = ms => new Date(ms).toISOString().replace("T", " ").slice(0, 16);
+const fmtP = x => x == null ? "–" : (x * 100).toFixed(1) + "%";
+const fmtN = (x, d = 2) => x == null ? "–" : Number(x).toFixed(d);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function getJSON(u){ const r = await fetch(u); if (!r.ok) throw new Error(u + " → HTTP " + r.status); return r.json(); }
+
+let chainHashes = null;   // Set hash yang sudah diverifikasi (untuk cek anchor)
+
+async function verifyChain(){
+  const btn = $("verify"), prog = $("prog"), res = $("vres");
+  btn.disabled = true; prog.hidden = false; res.textContent = "";
+  const head = await getJSON("/ledger/head"); prog.max = Math.max(head.rows, 1);
+  let prev = GENESIS, after = 0, n = 0, bad = null; const seen = new Set([GENESIS]);
+  try {
+    for (;;) {
+      const page = await getJSON(`/ledger/rows?after_seq=${after}&limit=5000`);
+      for (const row of page.rows) {
+        const h = await rowHash(prev, row);
+        if (row.prev_hash !== prev || h !== row.row_hash) { bad = row.seq; break; }
+        prev = row.row_hash; seen.add(prev); n++;
+      }
+      prog.value = n;
+      if (bad !== null || page.next_after_seq === null || page.rows.length === 0) break;
+      after = page.next_after_seq;
+    }
+    if (bad !== null) res.innerHTML = `<b class="bad">✗ Rantai putus di seq ${bad}</b> (baris ini atau sebelumnya diubah)`;
+    else res.innerHTML = `<b class="ok">✓ ${n.toLocaleString("id")} baris valid</b>, head hitungan browser <span class="mono">${prev.slice(0,16)}…</span>`
+      + (prev === head.head || n < head.rows ? "" : ' <span class="warn">(baris baru masuk saat verifikasi)</span>');
+    chainHashes = bad === null ? seen : null;
+  } catch (e) { res.innerHTML = `<span class="bad">Gagal: ${esc(e.message)}</span>`; }
+  btn.disabled = false; prog.hidden = true;
+}
+
+async function checkAnchor(){
+  const h = $("anchor").value.trim().toLowerCase(), out = $("ares");
+  if (!/^[0-9a-f]{64}$/.test(h)) { out.innerHTML = '<span class="bad">Harus 64 karakter hex</span>'; return; }
+  if (!chainHashes) await verifyChain();
+  if (!chainHashes) { out.innerHTML = '<span class="bad">Rantai tidak valid</span>'; return; }
+  out.innerHTML = chainHashes.has(h) ? '<b class="ok">✓ Head lama ada di rantai: riwayat sebelum titik itu tidak diubah</b>'
+                                     : '<b class="bad">✗ Tidak ditemukan: riwayat ditulis ulang</b>';
+}
+
+async function loadPerf(){
+  const days = $("days").value;
+  try {
+    const p = await getJSON(`/performance?days=${days}`);
+    const names = {champion_xgboost:"Champion XGBoost", challenger_lgbm:"Challenger LightGBM", hazard_xgb:"Hazard P(≤15m)"};
+    const cards = Object.entries(p.metrics || {}).map(([k, m]) => `<div class="kpi">
+      <span>${esc(names[k] || k)}</span>
+      <b>${m.pr_auc == null ? "–" : fmtN(m.pr_auc)} <small class="muted">PR-AUC</small></b>
+      <span>${m.pr_auc_lift == null ? "belum ada spike terskor" : fmtN(m.pr_auc_lift,1) + "× base rate " + fmtP(m.base_rate)}</span><br>
+      <span>lead median ${m.median_lead_min == null ? "–" : fmtN(m.median_lead_min,1) + " mnt"} · ${m.episodes_caught}/${m.episodes} episode</span><br>
+      <span>precision ${fmtP(m.precision)} · recall ${fmtP(m.recall)} · n=${m.n}</span></div>`);
+    $("perf").innerHTML = cards.join("") || '<span class="muted">Monitor belum berjalan.</span>';
+    const c = p.conformal;
+    $("thr").textContent = `Threshold alert saat ini ${fmtN(p.threshold,4)}` + (c ? ` (adaptive conformal: target alarm palsu ${fmtP(c.alpha)}, γ=${c.gamma}, realisasi ${fmtP(c.realized_rate)} dari ${c.updates} umpan balik)` : " (statis, dari kurva PR validasi)");
+  } catch (e) { $("perf").innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+}
+
+async function loadRecent(){
+  const m = $("model").value;
+  try {
+    const d = await getJSON(`/ledger/recent?limit=100${m ? "&model=" + encodeURIComponent(m) : ""}`);
+    $("recent").innerHTML = d.rows.map(r => `<tr>
+      <td><a href="/ledger/row/${r.seq}">${r.seq}</a></td><td>${fmtT(r.decision_ts)}</td><td>${esc(r.model_version)}</td>
+      <td>${fmtP(r.prob)}</td><td>${fmtN(r.threshold,4)}</td><td>${r.alerted ? "🔔" : ""}</td>
+      <td><span class="chip ${r.status === "OK" ? "ok" : r.status === "STALE" ? "bad" : "warn"}">${esc(r.status)}</span></td>
+      <td>${r.z == null ? '<span class="muted">menunggu</span>' : fmtN(r.z)}</td>
+      <td>${r.label == null ? "" : r.label ? '<b class="bad">spike</b>' : "normal"}</td></tr>`).join("")
+      || '<tr><td colspan="9" class="muted">Belum ada prediksi.</td></tr>';
+  } catch (e) { $("recent").innerHTML = `<tr><td colspan="9" class="bad">${esc(e.message)}</td></tr>`; }
+}
+
+async function loadIncidents(){
+  try {
+    const d = await getJSON("/incidents");
+    $("incidents").innerHTML = d.incidents.length ? "<ul>" + d.incidents.map(i => `<li><a href="/incidents/${encodeURIComponent(i.page)}">${esc(i.title)}</a>
+      <span class="muted">${esc(i.date || "")}${i.synthetic ? " · data sintetis (demo)" : ""}${i.lead_min != null ? " · lead " + fmtN(i.lead_min,0) + " mnt" : ""}</span></li>`).join("") + "</ul>"
+      : "Belum ada laporan insiden.";
+  } catch (e) { $("incidents").textContent = "Belum ada laporan insiden."; }
+}
+
+async function loadDetail(seq){
+  try {
+    const d = await getJSON(`/ledger/rows/${seq}`), r = d.row;
+    const h = await rowHash(r.prev_hash, r), ok = h === r.row_hash;
+    $("detail").innerHTML = `<section><h2>Baris #${r.seq} <a href="/" style="font-size:.85rem;font-weight:400">kembali</a></h2>
+      <p>${ok ? '<b class="ok">✓ Hash baris ini cocok</b>' : '<b class="bad">✗ Hash tidak cocok</b>'} (dihitung di browser dari prev_hash + JSON kanonik)</p>
+      <pre>${esc(canonical(r))}</pre>
+      <div class="row"><span class="muted">prev_hash</span><span class="mono">${esc(r.prev_hash)}</span></div>
+      <div class="row"><span class="muted">row_hash</span><span class="mono">${esc(r.row_hash)}</span></div>
+      <p class="muted">Keputusan yang sama (${fmtT(r.decision_ts)} UTC): ${d.same_decision.map(s => `<a href="/ledger/row/${s.seq}">${esc(s.model_version)} ${fmtP(s.prob)}</a>`).join(" · ")}</p>
+      <p>Outcome: ${r.label == null ? "belum diskor (menunggu " + r.horizon_min + " candle ke depan)" : `Z=${fmtN(r.z)} → ${r.label ? "spike" : "normal"}`}</p></section>`;
+  } catch (e) { $("detail").innerHTML = `<section class="bad">${esc(e.message)}</section>`; }
+}
+
+async function loadHead(){
+  const h = await getJSON("/ledger/head");
+  $("head").textContent = h.head; $("rows").textContent = h.rows.toLocaleString("id");
+}
+
+$("verify").onclick = verifyChain;
+$("checkAnchor").onclick = checkAnchor;
+$("days").onchange = loadPerf;
+$("model").onchange = loadRecent;
+const m = location.pathname.match(/\/ledger\/row\/(\d+)/);
+if (m) loadDetail(m[1]);
+loadHead().catch(e => $("head").textContent = e.message);
+loadPerf(); loadRecent(); loadIncidents();
+setInterval(() => { loadHead().catch(() => {}); loadRecent(); }, 60000);
+</script>
+</body>
+</html>
