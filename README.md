@@ -1,27 +1,14 @@
 # Crypto Volatility Predictor (BTCUSDT)
 
-**Angka live:** ![PR-AUC live](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/main/badges/champion_xgboost.json) · median lead time live ada di [`badges/champion_xgboost_metrics.json`](badges/) dan di halaman ledger. Badge ini dihitung mingguan dari [forecast ledger](#forecast-ledger) publik dan **belum berisi data**: service belum berjalan di pasar nyata. Satu-satunya angka yang ada sekarang berasal dari data **sintetis**: PR-AUC holdout 0.610 (14.8× base rate 4.1%) dengan median lead time 40 menit, dan pada data yang sama baseline GARCH(1,1) lebih baik (PR-AUC 0.755).
+![PR-AUC live](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/arystyh/crypto-volatility-predictor/main/badges/champion_xgboost.json)
+[![CI](https://github.com/arystyh/crypto-volatility-predictor/actions/workflows/ci.yml/badge.svg)](https://github.com/arystyh/crypto-volatility-predictor/actions/workflows/ci.yml)
+[![Ledger check](https://github.com/arystyh/crypto-volatility-predictor/actions/workflows/drift_check.yml/badge.svg)](https://github.com/arystyh/crypto-volatility-predictor/actions/workflows/drift_check.yml)
+![Hash chain](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/arystyh/crypto-volatility-predictor/main/badges/ledger.json)
+![Challenger](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/arystyh/crypto-volatility-predictor/main/badges/challenger_lgbm.json)
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
-[![Ledger check](https://github.com/OWNER/REPO/actions/workflows/drift_check.yml/badge.svg)](.github/workflows/drift_check.yml)
-![Hash chain](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/main/badges/ledger.json)
-![Challenger](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/main/badges/challenger_lgbm.json)
+Layanan prediksi lonjakan volatilitas Parkinson BTCUSDT untuk horizon 15 menit ke depan dengan notifikasi Telegram. Setiap prediksi dicatat ke dalam [forecast ledger](#forecast-ledger) berantai hash sebelum hasil aktualnya terbentuk dan diskor secara otomatis setiap 5 menit.
 
-> Ganti `OWNER/REPO` dengan repo GitHub kamu setelah push.
-
-Sistem ini memprediksi apakah volatilitas Parkinson BTCUSDT 15 menit ke depan akan lebih dari 2 standar deviasi di atas riwayat 30 harinya sendiri, lalu mengirim alert Telegram. Setiap prediksi dicatat di ledger berantai hash **sebelum** hasilnya diketahui, lalu diskor otomatis, sehingga performa live bisa diverifikasi siapa saja.
-
-## Isi
-
-- [Arsitektur](#arsitektur)
-- [Target yang diprediksi](#target-yang-diprediksi)
-- [Hasil evaluasi (data sintetis)](#hasil-evaluasi-data-sintetis)
-- [Latency terukur](#latency-terukur)
-- [Forecast ledger](#forecast-ledger)
-- [Keandalan: breaker, replay, chaos](#keandalan)
-- [Menjalankan](#menjalankan)
-- [Yang belum terbukti dan perlu lingkungan live](#yang-belum-terbukti)
-- [Extras: lampu ESP32](#extras-lampu-esp32)
+> **Status metrik:** Badge live di atas diperbarui mingguan dari ledger publik (detail metrik ada di [`badges/`](badges/)). Karena layanan belum dijalankan terus-menerus di pasar live, angka evaluasi di bawah berasal dari pengujian pada data **sintetis** 60 hari: PR-AUC holdout **0.610** (14.8x *base rate* 4.1%, median *lead time* 40 menit), sedangkan baseline GARCH(1,1) mencapai PR-AUC **0.755** pada dataset yang sama.
 
 ## Arsitektur
 
@@ -45,7 +32,7 @@ flowchart LR
   B --> CI[CI mingguan<br/>verify + commit head]
 ```
 
-Per candle 1 menit yang close, engine menjalankan langkah ini berurutan:
+Alur eksekusi pada setiap penutupan candle 1 menit:
 
 ```mermaid
 flowchart TD
@@ -54,186 +41,168 @@ flowchart TD
   C --> D{Circuit breaker}
   D -- DEGRADED --> D2[Fallback heuristic Parkinson]
   C --> G{Gate rezim HMM}
-  G --> H[Shadow: LightGBM challenger<br/>Hazard P onset ≤ 5/10/15m]
-  H --> I[Tulis ledger: 1 baris per model<br/>status + threshold + α/γ conformal]
+  G --> H[Shadow: LightGBM challenger<br/>Hazard P onset <= 5/10/15m]
+  H --> I[Tulis ledger: 1 baris per model<br/>status + threshold + alpha/gamma conformal]
   I --> J{STALE? cooldown?}
   J -- tidak --> K[Alert Telegram]
   J -- ya --> K2[Ditahan, tetap tercatat]
 ```
 
-| Komponen | File | Diuji di |
+| Komponen | Lokasi File | Pengujian |
 |---|---|---|
-| Target & baseline 30 hari (hanya masa lalu) | `app/ml/target.py` | `tests/test_target.py` |
-| Order book lokal (diff depth + snapshot, aturan sinkronisasi Binance) | `ingestion/orderbook.py` | `test_orderbook.py`, `test_orderbook_parity.py` (vs hftbacktest) |
-| Futures: likuidasi, mark price, basis, funding, open interest | `ingestion/futures_feed.py` | `test_chaos.py` |
-| Hawkes 2 dimensi (transaksi besar ≥ $100k, likuidasi), update O(1) | `app/hawkes.py` | `test_hawkes.py` |
-| Lead-lag perp → spot | `ingestion/leadlag.py` | `test_models_extra.py` |
-| Circuit breaker OK / DEGRADED / STALE | `app/core/circuit_breaker.py` | `test_reliability.py`, `test_chaos.py` |
+| Target & baseline 30 hari (strictly past) | `app/ml/target.py` | `tests/test_target.py` |
+| Order book lokal (diff depth + snapshot Binance) | `ingestion/orderbook.py` | `test_orderbook.py`, `test_orderbook_parity.py` |
+| Futures (likuidasi, mark price, basis, funding, OI) | `ingestion/futures_feed.py` | `test_chaos.py` |
+| Proses Hawkes 2D (transaksi >= $100k, likuidasi), update O(1) | `app/hawkes.py` | `test_hawkes.py` |
+| Lead-lag perpetual -> spot | `ingestion/leadlag.py` | `test_models_extra.py` |
+| Circuit breaker (`OK` / `DEGRADED` / `STALE`) | `app/core/circuit_breaker.py` | `test_reliability.py`, `test_chaos.py` |
 | Normalisasi EWM online (state di Redis) | `app/normalize.py` | `test_parity.py` |
 | Kalibrasi isotonic | `app/calibration.py` | `test_models_extra.py` |
 | Threshold adaptif (ACI) | `app/conformal.py` | `test_models_extra.py` |
-| Hazard diskrit P(onset ≤ k) | `app/hazard.py` | `test_models_extra.py` |
+| Hazard diskrit `P(onset <= k)` | `app/hazard.py` | `test_models_extra.py` |
 | Forecast ledger | `app/services/ledger.py` | `test_ledger.py`, `test_explorer.py`, `test_scripts.py` |
-| Rekaman tick & replay deterministik | `app/services/recorder.py`, `app/services/replay.py` | `test_recorder.py`, `test_replay.py` |
+| Perekam tick & replay deterministik | `app/services/recorder.py`, `app/services/replay.py` | `test_recorder.py`, `test_replay.py` |
 
-## Target yang diprediksi
+## Target Prediksi
 
-> Dalam 15 menit ke depan, apakah log volatilitas Parkinson BTCUSDT akan lebih dari 2 sd di atas baseline 30 harinya (yang hanya memakai data masa lalu)?
+Model memprediksi apakah log volatilitas Parkinson BTCUSDT dalam 15 menit ke depan akan melampaui **2 standar deviasi** di atas baseline historis 30 hari (hanya menggunakan data masa lalu).
 
-Threshold label (Z > 2) **terpisah** dari threshold probabilitas alert. Threshold alert dipilih dari kurva precision-recall fold validasi (recall maksimum dengan precision ≥ 0.5), disimpan di `models/metadata.json`, dan dicatat di setiap baris ledger. Pesan Telegram tidak menyebut Z-score sama sekali. Detail: [`docs/target_and_ledger.md`](docs/target_and_ledger.md).
+Threshold label (`Z > 2`) dipisahkan dari threshold probabilitas alert. Threshold alert dipilih dari kurva *precision-recall* pada fold validasi (memaksimalkan *recall* dengan syarat *precision* >= 0.5), disimpan di `models/metadata.json`, dan dicatat pada setiap baris ledger. Detail spesifikasi ada di [`docs/target_and_ledger.md`](docs/target_and_ledger.md).
 
-## Hasil evaluasi (data sintetis)
+## Evaluasi (Data Sintetis)
 
-> ⚠️ Lingkungan build tidak bisa mengakses Binance, jadi semua angka di bagian ini dari data **sintetis** 60 hari (`training/synthetic.py`). Angka ini membuktikan pipeline evaluasinya berjalan, **bukan** performa pasar. Latih ulang dengan `python -m training.train --source binance --days 90`; laporan lengkap ada di [`reports/EVALUATION.md`](reports/EVALUATION.md).
+Karena proses build CI berjalan tanpa akses jaringan ke Binance, angka di bawah dihasilkan dari generator data sintetis 60 hari (`training/synthetic.py`) untuk memverifikasi pipeline evaluasi. Untuk melatih ulang dengan data historis pasar nyata, jalankan `python -m training.train --source binance --days 90`. Laporan lengkap tersedia di [`reports/EVALUATION.md`](reports/EVALUATION.md).
 
-Split waktu train / val / holdout = 48,367 / 12,156 / 15,259 menit, dipisah 255 menit (= horizon 15 + lookback fitur 240, dihitung oleh `TargetSpec.min_embargo`, diuji di `tests/test_purged_cv.py`). Model hanya dilatih di train; kalibrasi dan threshold dipilih di val; semua angka di bawah dari holdout.
+Pembagian waktu train / val / holdout adalah **48,367 / 12,156 / 15,259 menit** dengan jarak *embargo* 255 menit (horizon 15 menit + *lookback* fitur 240 menit via `TargetSpec.min_embargo`, diverifikasi di `tests/test_purged_cv.py`).
 
-### Perbandingan dengan baseline sederhana
+### Perbandingan Baseline
 
-Threshold tiap model dipilih di val dengan aturan yang sama. Lead time memakai definisi yang sama dengan skor ledger live.
-
-| Model | PR-AUC | Lift vs acak | ROC-AUC | Brier | Median lead time |
+| Model | PR-AUC | Lift vs Acak | ROC-AUC | Brier | Median Lead Time |
 |---|---|---|---|---|---|
-| GARCH(1,1) | **0.755** | 18.3× | 0.961 | 0.0180 | 45.0 mnt (23/23 episode) |
-| Persistence (vol sekarang berlanjut) | 0.736 | 17.9× | 0.957 | 0.0187 | 45.0 mnt (23/23 episode) |
-| HAR-RV (15m/1j/1h) | 0.732 | 17.8× | 0.957 | 0.0188 | 45.0 mnt (23/23 episode) |
-| LightGBM (challenger) | 0.650 | 15.8× | 0.950 | 0.0278 | 43.0 mnt (23/23 episode) |
-| **XGBoost (champion, isotonic)** | 0.610 | 14.8× | 0.949 | 0.0238 | 40.0 mnt (22/23 episode) |
-| Hazard P(onset ≤ 15m) | 0.539 | 13.1× | 0.955 | 0.0266 | 45.0 mnt (23/23 episode) |
+| GARCH(1,1) | **0.755** | 18.3x | 0.961 | 0.0180 | 45.0 mnt (23/23 episode) |
+| Persistence | 0.736 | 17.9x | 0.957 | 0.0187 | 45.0 mnt (23/23 episode) |
+| HAR-RV (15m/1j/1h) | 0.732 | 17.8x | 0.957 | 0.0188 | 45.0 mnt (23/23 episode) |
+| LightGBM (challenger) | 0.650 | 15.8x | 0.950 | 0.0278 | 43.0 mnt (23/23 episode) |
+| **XGBoost (champion, isotonic)** | 0.610 | 14.8x | 0.949 | 0.0238 | 40.0 mnt (22/23 episode) |
+| Hazard `P(onset <= 15m)` | 0.539 | 13.1x | 0.955 | 0.0266 | 45.0 mnt (23/23 episode) |
 
-**XGBoost kalah dari ketiga baseline sederhana di data ini.** Generator sintetis memakai rezim volatilitas Markov dengan persistensi tinggi, jadi model yang hanya melihat volatilitas sekarang memang unggul. Kalau hal yang sama terjadi di data Binance, champion sebaiknya diganti GARCH/HAR sampai ada fitur yang terbukti menambah nilai.
+Pada data sintetis berbasis Markov dengan persistensi tinggi ini, model baseline yang mengandalkan volatilitas terkini mengungguli XGBoost. Jika pola yang sama muncul pada data Binance aktual, model champion dapat diganti ke GARCH/HAR sebelum fitur mikrostruktur tambahan diaktifkan.
 
-### Ablation kelompok fitur
+### Ablation Fitur
 
-| Kelompok dibuang | ΔPR-AUC | Δ median lead | Kesimpulan |
+| Kelompok Fitur | ΔPR-AUC | Δ Median Lead | Catatan |
 |---|---|---|---|
-| VPIN | −0.0107 | −2.0 mnt | berkontribusi |
-| SWT (wavelet) | +0.0017 | 0.0 mnt | tidak berkontribusi, kandidat dibuang (`--apply-ablation`) |
-| OBI order book, Hawkes, lead-lag, funding/OI | n/a | n/a | fitur live-only: belum ada histori tick untuk melatihnya |
+| VPIN | -0.0107 | -2.0 mnt | Berkontribusi positif |
+| SWT (wavelet) | +0.0017 | 0.0 mnt | Tidak signifikan, opsi hapus via `--apply-ablation` |
+| OBI order book, Hawkes, lead-lag, funding/OI | n/a | n/a | Khusus mode live (belum masuk training karena butuh histori tick) |
 
-Fitur live-only dihitung dan dicatat (`/micro/BTCUSDT`, rekaman Parquet) tetapi **tidak** masuk model sampai ada ≥ beberapa minggu rekaman dan ablation membuktikannya.
+### Kalibrasi, Hazard, dan Threshold Adaptif
 
-### Kalibrasi, hazard, threshold adaptif
+- **Kalibrasi isotonic:** Menurunkan skor Brier pada holdout dari `0.02773` menjadi `0.02379`. Diagram keandalan tersedia di [`reports/figures/reliability.png`](reports/figures/reliability.png).
+- **Model hazard `P(onset <= 5/10/15m)`:** Menghasilkan PR-AUC `0.545 / 0.542 / 0.539` dengan median *lead time* 45 menit; digunakan sebagai informasi estimasi waktu kejadian di pesan alert.
+- **Adaptive Conformal Inference (ACI):** Dengan target *false alert* 20% (`gamma = 0.01`):
 
-- **Isotonic** (dilatih di val): Brier holdout 0.02773 → **0.02379**. Reliability diagram: [`reports/figures/reliability.png`](reports/figures/reliability.png).
-- **Hazard** P(onset ≤ 5/10/15m): PR-AUC 0.545 / 0.542 / 0.539, monoton naik secara konstruksi. Lebih buruk dari model biner di PR-AUC (0.539 vs 0.610), lebih baik di lead time (45 vs 40 menit). Dipakai untuk informasi "kapan" di pesan alert, bukan untuk memicu alert.
-- **Adaptive conformal (ACI)**, target porsi alert palsu 20%, γ = 0.01:
-
-| Skenario holdout | Alert palsu threshold statis | Alert palsu ACI |
+| Skenario Holdout | False Alert (Threshold Statis) | False Alert (ACI) |
 |---|---|---|
-| Apa adanya | 0.60 | **0.35** |
-| Pergantian rezim (logit +1.5 di paruh kedua) | 0.80 | **0.37** |
+| Normal | 0.60 | **0.35** |
+| Pergantian rezim (logit +1.5 pada paruh kedua) | 0.80 | **0.37** |
 
-ACI jauh lebih baik dari threshold statis saat rezim berganti, tetapi **belum mencapai target 20%** dengan γ = 0.01 di holdout ini. γ dan target tercatat di setiap baris ledger dan bisa diubah lewat `/setalpha` atau `CONFORMAL_GAMMA`.
+- **Purged walk-forward CV:** PR-AUC per fold `0.565 / 0.598 / 0.604 / 0.653 / 0.790` (rata-rata **0.642**).
 
-### Purged walk-forward CV
+## Benchmark Latency
 
-PR-AUC per fold 0.565 / 0.598 / 0.604 / 0.653 / 0.790, rata-rata 0.642.
-
-## Latency terukur
-
-`python -m bench.bench_pipeline --minutes 120` memutar 66,140 pesan WebSocket sintetis lewat jalur produksi (Intel Xeon 2.1 GHz, 4 core, Python 3.13, Redis in-process). Laporan: [`reports/benchmark.md`](reports/benchmark.md).
+Hasil eksekusi `python -m bench.bench_pipeline --minutes 120` untuk memproses 66,140 pesan WebSocket sintetis (Intel Xeon 2.1 GHz, 4 core, Python 3.13, Redis in-process). Detail ada di [`reports/benchmark.md`](reports/benchmark.md).
 
 | Tahap (per candle close) | p50 | p95 | p99 |
 |---|---|---|---|
-| Fitur (240 menit + EWM z) | 27.2 ms | 37.1 ms | 43.0 ms |
+| Ekstraksi fitur (240 menit + EWM z) | 27.2 ms | 37.1 ms | 43.0 ms |
 | Champion ONNX + isotonic | 1.20 ms | 1.42 ms | 1.52 ms |
 | Challenger LightGBM | 1.02 ms | 1.26 ms | 2.17 ms |
 | Hazard XGBoost | 0.95 ms | 1.23 ms | 1.29 ms |
 | Tulis ledger (SHA-256 + SQLite) | 2.27 ms | 3.14 ms | 5.92 ms |
-| **Kline close diterima → keputusan selesai** | **39.4 ms** | **52.7 ms** | **68.1 ms** |
+| **Total (kline close -> keputusan)** | **39.4 ms** | **52.7 ms** | **68.1 ms** |
 
 | Per pesan WebSocket | p50 | p99 |
 |---|---|---|
 | `depth` (update order book lokal) | 0.10 ms | 0.40 ms |
 | `aggTrade` | 0.004 ms | 0.043 ms |
 
-Tahap terberat adalah fitur, bukan model. Di produksi tambahkan RTT Redis (lokal ~0.2–1 ms, Upstash ~5–20 ms) dan waktu kirim Telegram. CI menjalankan benchmark ini di setiap push dan menaruh tabelnya di ringkasan job.
+## Forecast Ledger
 
-## Forecast ledger
+- **Append-only:** Trigger SQLite memblokir operasi `UPDATE` dan `DELETE`.
+- **Hash chain:** `row_hash = sha256(prev_hash + JSON kanonik)`, mencakup status breaker, threshold aktif, dan parameter conformal (`alpha`/`gamma`).
+- **Batas waktu pencatatan:** Baris ditolak apabila ditulis lebih dari 60 detik setelah waktu keputusan.
+- **Frozen baseline:** Evaluasi skor memakai nilai `mu` dan `sigma` yang tersimpan pada saat prediksi dibuat.
 
-- **Append-only**: trigger SQLite menolak UPDATE/DELETE.
-- **Hash chain**: `row_hash = sha256(prev_hash + JSON kanonik)`, termasuk status breaker, threshold yang berlaku, dan α/γ conformal.
-- **Tidak bisa dicatat terlambat**: baris ditolak bila ditulis > 60 detik setelah waktu keputusan.
-- **Baseline dibekukan**: skor memakai μ/σ yang tersimpan di baris itu.
-- Champion, challenger, dan hazard mencatat di keputusan yang sama, jadi perbandingan shadow adil.
+Verifikasi integritas ledger dapat dilakukan melalui tiga cara:
 
-Verifikasi tanpa mempercayai server:
+1. **Browser:** Buka halaman utama `/` (explorer) dan klik *Verifikasi di browser* untuk menghitung ulang seluruh rantai hash via SubtleCrypto.
+2. **CLI:** Jalankan `python -m scripts.verify_ledger --url https://<host> --anchor badges/ledger_head.txt`.
+3. **CI mingguan:** Workflow [`drift_check.yml`](.github/workflows/drift_check.yml) memverifikasi rantai hash secara berkala, membuka issue jika rantai terputus, dan memperbarui `badges/*.json` serta `ledger_head.txt`.
 
-1. **Browser**: buka `/` (explorer) lalu tekan *Verifikasi di browser*. Halaman mengunduh `/ledger/rows` dan menghitung ulang semua hash (SubtleCrypto, fallback JS murni). Hash JS dicocokkan dengan Python di `tests/test_explorer.py`. Kolom "Cek ada di rantai" menerima head lama dari git untuk membuktikan riwayat tidak ditulis ulang.
-2. **Terminal**: `python -m scripts.verify_ledger --url https://<host> --anchor badges/ledger_head.txt`.
-3. **CI mingguan** ([`drift_check.yml`](.github/workflows/drift_check.yml)): langkah 2, job merah dan issue dibuka bila rantai putus atau head minggu lalu hilang; kalau lolos, commit `badges/*.json` + `ledger_head.txt`. PSI drift fitur (ambang 0.2) opsional lewat `vars.PSI_CHECK`.
+### Simulasi Insiden Historis
 
-Halaman explorer juga menampilkan metrik per model (PR-AUC, lift, precision, recall, lead time), prediksi terbaru beserta hasilnya, dan tautan halaman insiden.
+Perintah `python -m scripts.build_incident --event all` membangun halaman analisis untuk 5 peristiwa volatilitas ekstrem (COVID 2020-03-12, larangan kripto China 2021-05-19, LUNA 2022-05, FTX 2022-11-08, dan *yen carry* 2024-08-05). Karena pengunduhan arsip historis membutuhkan koneksi langsung ke Binance, saat ini repositori menyertakan 3 contoh hasil generasi sintetis (`--demo`) di [`reports/incidents/`](reports/incidents/).
 
-### Halaman insiden
+## Keandalan Sistem
 
-`python -m scripts.build_incident --event all` membangun halaman untuk COVID 2020-03-12, larangan kripto China 2021-05-19, LUNA 2022-05, FTX 2022-11-08, dan yen carry 2024-08-05: harga, RV 15m, intensitas Hawkes (transaksi besar dari arsip aggTrades, likuidasi bila arsipnya ada), P(spike), P(≤5/10/15m), waktu alert, episode spike, dan lead time. Butuh akses Binance, jadi **belum dibangun di repo ini**. Yang ada sekarang adalah 3 contoh dari data sintetis (`--demo`, berlabel jelas) di [`reports/incidents/`](reports/incidents/).
-
-## Keandalan
-
-| Mekanisme | Bukti |
+| Mekanisme | Pengujian |
 |---|---|
-| Breaker **STALE** bila stream wajib (kline, aggTrade, depth) lebih tua dari 5 detik, atau baru pulih < 30 detik: alert ditahan, prediksi tetap dicatat dengan `status=STALE` | `test_chaos.py::test_ws_down_30s_*` |
-| Breaker **DEGRADED** bila model/fitur gagal atau timeout: fallback heuristic Parkinson, baris ledger `fallback_parkinson` berstatus DEGRADED | `test_degraded.py` |
-| Gap aggTrade/kline diisi dari REST, order book resync otomatis bila update hilang | `test_chaos.py` (reconnect harian, depth hilang) |
-| Redis restart / API restart: state baseline, EWM, conformal, cooldown dimuat ulang; pesan menggantung diambil lagi (XAUTOCLAIM) | `test_chaos.py` |
-| Replay deterministik: dua replay atas rekaman yang sama → ledger byte-identik | `test_replay.py` |
-| Fitur training == fitur live (batch vs streaming) | `test_parity.py` |
-| Order book lokal == hftbacktest (best bid/ask + qty per level) | `test_orderbook_parity.py` |
-| Command Telegram pengubah state hanya dari `ALLOWED_CHAT_IDS`, ditolak & dicatat dari chat lain, nilai divalidasi 0 < p < 1 | `test_reliability.py` |
+| Breaker **STALE** jika stream wajib (`kline`, `aggTrade`, `depth`) tertinggal > 5 detik atau baru pulih < 30 detik; alert ditahan tetapi prediksi tetap dicatat | `test_chaos.py` |
+| Breaker **DEGRADED** saat inferensi model/fitur gagal atau timeout; sistem beralih ke heuristik Parkinson | `test_degraded.py` |
+| Pengisian celah `aggTrade`/`kline` via REST dan resync otomatis order book saat urutan update terputus | `test_chaos.py` |
+| Pemulihan state otomatis (baseline, EWM, conformal, cooldown) dan klaim pesan menggantung (`XAUTOCLAIM`) setelah restart Redis/API | `test_chaos.py` |
+| Replay deterministik atas rekaman Parquet menghasilkan ledger *byte-identical* | `test_replay.py` |
+| Konsistensi fitur batch (training) vs streaming (live) serta paritas order book terhadap `hftbacktest` | `test_parity.py`, `test_orderbook_parity.py` |
+| Validasi perintah Telegram hanya dari `ALLOWED_CHAT_IDS` dengan batas parameter `0 < p < 1` | `test_reliability.py` |
 
-Status breaker ada di `/health` (`breaker_state`) dan `/metrics` (`cvp_breaker_state` untuk Prometheus).
+Status breaker dipublikasikan di endpoint `/health` (`breaker_state`) dan `/metrics` (`cvp_breaker_state`).
 
-## Menjalankan
+## Cara Menjalankan
+
+### Menggunakan Docker
 
 ```bash
-cp .env.example .env            # isi TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ALLOWED_CHAT_IDS, ADMIN_API_TOKEN
-docker compose up --build       # Redis (AOF) + ingestion + API; explorer di http://localhost:8000
+cp .env.example .env        # isi TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ALLOWED_CHAT_IDS, ADMIN_API_TOKEN
+docker compose up --build   # menjalankan Redis (AOF), ingestion worker, dan API di http://localhost:8000
 ```
 
-Tanpa Docker (Python 3.12):
+### Tanpa Docker (Python 3.12+)
 
 ```bash
 pip install -r requirements-dev.txt
-python -m training.train --source binance --days 90     # atau --source synthetic untuk demo offline
-redis-server &                                          # atau REDIS_URL ke Upstash
+python -m training.train --source binance --days 90   # gunakan --source synthetic untuk mode offline
+redis-server &                                        # atau arahkan REDIS_URL ke Upstash
 python -m ingestion.worker &
 uvicorn app.main:app --port 8000
-pytest -q                                               # 74 test, ~70 detik
+pytest -q
 ```
 
-**Windows** (tanpa Docker): pakai Python 3.12, set `PYTHONUTF8=1` (laporan berisi karakter seperti ≤ dan →), dan jalankan Redis lewat Docker Desktop, WSL (`sudo apt install redis-server`), atau Upstash gratis (`REDIS_URL=rediss://...`).
+**Catatan Windows:** Set variabel environment `PYTHONUTF8=1` sebelum menjalankan skrip laporan, dan jalankan Redis melalui Docker Desktop, WSL, atau layanan cloud seperti Upstash (`REDIS_URL=rediss://...`).
 
-Alat lain:
+### Utilitas CLI Tambahan
 
-| Perintah | Fungsi |
+| Perintah | Kegunaan |
 |---|---|
-| `RECORD_TICKS=true` | rekam semua pesan mentah ke Parquet (`data/ticks/stream/YYYY-MM-DD/HH/`) |
-| `python -m app.services.replay --ticks data/ticks --history hist.csv` | replay deterministik rekaman lewat jalur produksi |
-| `python -m scripts.fit_hawkes --ticks data/ticks` | fit parameter Hawkes mingguan (MLE) |
-| `python -m scripts.leadlag_report --ticks data/ticks` | ukur berapa detik perp memimpin spot → `reports/leadlag.md` |
-| `python -m scripts.build_incident --event ftx` | bangun ulang satu halaman insiden |
-| `python -m scripts.psi_drift --url https://<host>` | PSI fitur live vs data train |
-| `python -m bench.bench_pipeline` | benchmark latency |
+| `RECORD_TICKS=true` | Merekam stream mentah ke format Parquet (`data/ticks/stream/YYYY-MM-DD/HH/`) |
+| `python -m app.services.replay --ticks data/ticks --history hist.csv` | Menjalankan replay deterministik dari rekaman tick |
+| `python -m scripts.fit_hawkes --ticks data/ticks` | Estimasi parameter Hawkes (MLE) dari data rekaman |
+| `python -m scripts.leadlag_report --ticks data/ticks` | Analisis jeda waktu perpetual terhadap spot -> [`reports/leadlag.md`](reports/leadlag.md) |
+| `python -m scripts.build_incident --event ftx` | Membuat halaman insiden tunggal |
+| `python -m scripts.psi_drift --url https://<host>` | Menghitung PSI drift fitur live terhadap data latih |
+| `python -m bench.bench_pipeline` | Menjalankan benchmark latency pipeline |
 
-Endpoint utama: `/` explorer, `/ledger/rows`, `/ledger/head`, `/ledger/verify`, `/performance`, `/health`, `/metrics`, `/status`, `/predict` (manual, tidak dicatat di ledger), `PUT /config/threshold` (butuh `X-Admin-Token`). Dokumentasi lengkap di `/docs`.
+**Endpoint API:** `/` (explorer), `/ledger/rows`, `/ledger/head`, `/ledger/verify`, `/performance`, `/health`, `/metrics`, `/status`, `/predict`, serta `PUT /config/threshold` (memerlukan header `X-Admin-Token`). Dokumentasi interaktif tersedia di `/docs` saat server berjalan.
 
-**Deploy gratis (Render)**: [`render.yaml`](render.yaml) menjalankan semua di satu web service. Disk Render gratis **tidak persisten**, jadi ledger SQLite hilang saat redeploy; untuk ledger yang bisa diaudit pakai persistent disk (berbayar) atau VPS, dan biarkan CI mingguan meng-commit head ke git.
+**Deploy Render:** Konfigurasi di [`render.yaml`](render.yaml) menjalankan seluruh komponen dalam satu layanan web. Untuk deployment produksi yang membutuhkan persistensi ledger SQLite saat redeploy, gunakan *persistent disk* atau VPS.
 
-## Yang belum terbukti
+## Batasan & Tahap Selanjutnya
 
-Hal-hal ini butuh koneksi ke Binance dan waktu berjalan, jadi belum ada angkanya:
+- Mengumpulkan rekaman live minimal 1 minggu untuk mengisi data badge publik dan memvalidasi paritas order book pada kondisi pasar aktual.
+- Melakukan *fitting* ulang parameter Hawkes (`models/hawkes_params.json`) dan pengukuran *lead-lag* menggunakan rekaman tick asli (saat ini [`reports/leadlag.md`](reports/leadlag.md) masih memakai data sintetis dengan lag buatan 2 detik).
+- Membangun halaman insiden dari arsip historis Binance aktual.
+- Endpoint futures `fstream.binance.com` mengembalikan HTTP 451 dari IP server Amerika Serikat; pada region tersebut fitur futures dinonaktifkan otomatis tanpa memicu status breaker.
 
-- **Performa pasar nyata**: badge live di atas, setelah service berjalan ≥ 1 minggu.
-- **Rekaman 24 jam** + `check_continuity` tanpa gap, lalu parity order book vs hftbacktest atas rekaman itu (sekarang diuji atas 15 menit tick sintetis).
-- **Lag perp → spot nyata**: [`reports/leadlag.md`](reports/leadlag.md) sekarang dari data sintetis yang sengaja dibuat perp memimpin 2 detik; ini hanya membuktikan pengukurannya bekerja.
-- **Hawkes** di-fit dari data nyata (`models/hawkes_params.json` sekarang parameter default).
-- **Halaman insiden** untuk 5 peristiwa nyata.
-- Stream futures `fstream.binance.com` diblokir dari IP AS (HTTP 451); di server AS fitur futures kosong dan breaker tidak mewajibkannya.
+## Integrasi Perangkat Keras (ESP32)
 
-Sengaja tidak dikerjakan: clone penuh hftbacktest/NautilusTrader, exchange atau simbol selain BTCUSDT, dan deep learning sebelum baseline dan ablation selesai di data nyata.
-
-## Extras: lampu ESP32
-
-[`firmware/`](firmware/) berisi sketch Arduino ESP32 + diagram Wokwi: LED hijau/kuning/merah dan buzzer mengikuti P(spike) terhadap threshold dari `GET /status`, dan berkedip saat sistem STALE/DEGRADED. Ini pelengkap, bukan bagian dari sistem yang diukur di atas.
+Direktori [`firmware/`](firmware/) berisi *sketch* Arduino ESP32 dan simulasi Wokwi untuk indikator fisik menggunakan LED (hijau/kuning/merah) dan buzzer berdasarkan nilai probabilitas terhadap threshold dari endpoint `GET /status`.
