@@ -203,6 +203,8 @@ uvicorn app.main:app --port 8000
 pytest -q                                               # 74 test, ~70 detik
 ```
 
+**Windows** (tanpa Docker): pakai Python 3.12, set `PYTHONUTF8=1` (laporan berisi karakter seperti ≤ dan →), dan jalankan Redis lewat Docker Desktop, WSL (`sudo apt install redis-server`), atau Upstash gratis (`REDIS_URL=rediss://...`).
+
 Alat lain:
 
 | Perintah | Fungsi |

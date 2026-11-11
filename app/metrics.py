@@ -12,7 +12,10 @@ Tahap yang diukur per candle:
 from __future__ import annotations
 
 import os
-import resource
+try:
+    import resource  # tidak ada di Windows
+except ImportError:  # pragma: no cover
+    resource = None
 import sys
 import time
 from collections import defaultdict, deque
@@ -34,6 +37,8 @@ def _rss_mb() -> float | None:
 
 
 def _peak_rss_mb() -> float:
+    if resource is None:
+        return _rss_mb() or 0.0
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return peak / (1024 * 1024) if sys.platform == "darwin" else peak / 1024
 
