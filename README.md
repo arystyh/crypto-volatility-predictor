@@ -1,10 +1,6 @@
 # Crypto Volatility Predictor (BTCUSDT)
 
-![PR-AUC live](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/arystyh/crypto-volatility-predictor/main/badges/champion_xgboost.json)
-[![CI](https://github.com/arystyh/crypto-volatility-predictor/actions/workflows/ci.yml/badge.svg)](https://github.com/arystyh/crypto-volatility-predictor/actions/workflows/ci.yml)
-[![Ledger check](https://github.com/arystyh/crypto-volatility-predictor/actions/workflows/drift_check.yml/badge.svg)](https://github.com/arystyh/crypto-volatility-predictor/actions/workflows/drift_check.yml)
-![Hash chain](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/arystyh/crypto-volatility-predictor/main/badges/ledger.json)
-![Challenger](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/arystyh/crypto-volatility-predictor/main/badges/challenger_lgbm.json)
+[![CI](https://github.com/arystyh/crypto-volatility-predictor/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 
 Layanan prediksi lonjakan volatilitas Parkinson BTCUSDT untuk horizon 15 menit ke depan dengan notifikasi Telegram. Setiap prediksi dicatat ke dalam [forecast ledger](#forecast-ledger) berantai hash sebelum hasil aktualnya terbentuk dan diskor secara otomatis setiap 5 menit.
 
